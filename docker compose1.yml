@@ -10,7 +10,7 @@ services:
       - redis_data:/data  # Persistencia de datos
     command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
     networks:
-      - monitoring
+      - coolify
     restart: unless-stopped
   
   redis-exporter:
@@ -22,11 +22,13 @@ services:
       REDIS_ADDR: "redis:6379"
       REDIS_PASSWORD: "contra"  # ¡Actualiza esto!
     networks:
-      - monitoring
+      - coolify
     restart: unless-stopped
 
   prometheus:
     image: prom/prometheus:latest
+    build:
+      context: 'https://github.com/miuguelt/Monitoreo.git'
     container_name: prometheus
     ports:
       - "9090:9090"
@@ -34,27 +36,40 @@ services:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
     networks:
-      - monitoring
+      - coolify
     restart: unless-stopped
+
+    netdata:
+      image: netdata/netdata:latest
+      container_name: netdata
+      ports:
+        - "19999:19999"  # Puerto de la interfaz web de Netdata
+      volumes:
+        - /proc:/host/proc:ro
+        - /sys:/host/sys:ro
+        - /var/run/docker.sock:/var/run/docker.sock:ro
+        - /etc/os-release:/etc/os-release:ro
+        - /etc/passwd:/etc/passwd:ro
+        - /etc/group:/etc/group:ro
+      environment:
+        - NETDATA_HOSTNAME=coolify-monitor  # Nombre del host en Netdata
+      restart: unless-stopped
+      networks:
+        - coolify_network
 
   grafana:
     image: grafana/grafana:latest
     container_name: grafana
-    ports:
-      - "3005:3000"
     environment:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=admin
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning
     networks:
-      - monitoring
+      - coolify
     restart: unless-stopped
 
-networks:
-  monitoring:
-    driver: bridge
-    name: monitoring
+
 
 # Nota: La configuración de Prometheus (global, scrape_configs) debe estar en el archivo prometheus.yml y no en este archivo docker-compose.yml.
 
