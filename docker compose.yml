@@ -1,0 +1,67 @@
+networks:
+  monitoring:
+    driver: bridge
+
+volumes:
+  prometheus_data: {}
+  grafana_data: {}
+
+services:
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    networks:
+      - monitoring
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro # Monta config de Prometheus (solo lectura)
+      - prometheus_data:/prometheus                       # Volumen para datos de Prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-lifecycle' # Permite recargar config sin reiniciar
+    restart: unless-stopped
+
+  node-exporter:
+    # Se recomienda usar la imagen de Quay.io
+    image: quay.io/prometheus/node-exporter:latest
+    container_name: node-exporter
+    networks:
+      - monitoring
+    ports:
+      - "9100:9100" # Puerto donde Node Exporter expone las métricas
+    # ---- IMPORTANTE: Permisos para leer métricas del HOST ----
+    pid: host # Comparte el espacio de nombres PID del host
+    volumes:
+      - /proc:/host/proc:ro # Monta /proc del host (solo lectura)
+      - /sys:/host/sys:ro   # Monta /sys del host (solo lectura)
+      - /:/rootfs:ro        # Monta el sistema de archivos raíz del host (solo lectura)
+    command:
+      - '--path.procfs=/host/proc' # Indica a node-exporter dónde está /proc
+      - '--path.sysfs=/host/sys'   # Indica a node-exporter dónde está /sys
+      - '--path.rootfs=/rootfs'  # Indica a node-exporter dónde está la raíz del host
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc|rootfs/var/lib/docker/containers|rootfs/var/lib/docker/overlay2|rootfs/run/docker/netns|rootfs/var/lib/docker/aufs)($$|/)' # Excluye puntos de montaje virtuales/docker
+    # ----------------------------------------------------------
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    networks:
+      - monitoring
+    ports:
+      # Puedes cambiar el puerto 3000 si ya está en uso en tu host
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana # Volumen para persistencia de Grafana (dashboards, datasources)
+    environment:
+      # Opcional: Define usuario/contraseña admin por defecto
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin # ¡Cámbialo!
+      # GF_INSTALL_PLUGINS: # Opcional: Instalar plugins al inicio
+    depends_on: # Asegura que Prometheus esté disponible antes de iniciar Grafana
+      - prometheus
+    restart: unless-stopped

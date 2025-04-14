@@ -1,0 +1,23 @@
+# prometheus.yml
+
+global:
+  scrape_interval: 15s # Intervalo de recolección (scrape)
+
+scrape_configs:
+  # Configuración para monitorear el propio servidor Prometheus
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090'] # 'localhost' funciona porque es desde la perspectiva del contenedor Prometheus
+
+  # Configuración para monitorear Node Exporter (que expone métricas del host)
+  - job_name: 'node-exporter'
+    static_configs:
+      # Usamos el nombre del servicio 'node-exporter' y su puerto dentro de la red Docker
+      - targets: ['node-exporter:9100']
+
+  - job_name: 'netdata'
+    metrics_path: /api/v1/allmetrics
+    params:
+      format: [prometheus]
+    static_configs:
+      - targets: ['netdata:19999']
